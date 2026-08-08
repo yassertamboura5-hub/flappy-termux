@@ -1,4 +1,4 @@
-const BEST_KEY = 'flappy-v8';
+const BEST_KEY = 'flappy-v10';
 
 const config = {
   type: Phaser.AUTO,
@@ -22,62 +22,87 @@ const config = {
 
 new Phaser.Game(config);
 
-let bird;
-let pipes;
-let score = 0;
-let scoreText;
-let bestText;
-let bestScore = 0;
-let isGameOver = false;
-let isStarted = false;
-let ground;
-let pipeTimer;
+let bird, pipes, coins;
+let score = 0, scoreText, bestText, bestScore = 0;
+let isGameOver = false, isStarted = false;
+let ground, pipeTimer, coinTimer;
 let gameOverTexts = [];
+let bgMusic = null;
 
 function preload() {
-  const birdGfx = this.make.graphics({ x: 0, y: 0, add: false });
-  birdGfx.fillStyle(0xffd700);
-  birdGfx.fillCircle(16, 16, 14);
-  birdGfx.fillStyle(0xff6600);
-  birdGfx.fillTriangle(28, 13, 40, 16, 28, 20);
-  birdGfx.fillStyle(0xffffff);
-  birdGfx.fillCircle(20, 11, 4);
-  birdGfx.fillStyle(0x000000);
-  birdGfx.fillCircle(21, 11, 2);
-  birdGfx.generateTexture('bird', 44, 32);
+  // ===== FUSÉE =====
+  let g = this.make.graphics({ x: 0, y: 0, add: false });
+  
+  // Corps de la fusée (rouge)
+  g.fillStyle(0xe74c3c);
+  g.fillRect(10, 4, 20, 28);
+  
+  // Pointe (blanc)
+  g.fillStyle(0xecf0f1);
+  g.fillTriangle(10, 4, 20, -6, 30, 4);
+  
+  // Hublot
+  g.fillStyle(0x3498db);
+  g.fillCircle(20, 14, 5);
+  g.fillStyle(0xffffff);
+  g.fillCircle(20, 14, 2.5);
+  
+  // Ailerons
+  g.fillStyle(0xc0392b);
+  g.fillTriangle(10, 26, 2, 34, 10, 32);
+  g.fillTriangle(30, 26, 38, 34, 30, 32);
+  
+  // Flammes
+  g.fillStyle(0xf39c12);
+  g.fillTriangle(14, 32, 20, 44, 26, 32);
+  g.fillStyle(0xf1c40f);
+  g.fillTriangle(16, 32, 20, 40, 24, 32);
+  
+  g.generateTexture('bird', 40, 48);
 
-  const pipeGfx = this.make.graphics({ x: 0, y: 0, add: false });
-  pipeGfx.fillStyle(0x2ecc71);
-  pipeGfx.fillRect(0, 0, 70, 500);
-  pipeGfx.fillStyle(0x27ae60);
-  pipeGfx.fillRect(0, 0, 70, 30);
-  pipeGfx.fillRect(0, 470, 70, 30);
-  pipeGfx.generateTexture('pipe', 70, 500);
+  // Tuyau
+  g = this.make.graphics({ x: 0, y: 0, add: false });
+  g.fillStyle(0x2ecc71);
+  g.fillRect(0, 0, 70, 500);
+  g.fillStyle(0x27ae60);
+  g.fillRect(0, 0, 70, 30);
+  g.fillRect(0, 470, 70, 30);
+  g.generateTexture('pipe', 70, 500);
 
-  const groundGfx = this.make.graphics({ x: 0, y: 0, add: false });
-  groundGfx.fillStyle(0xded895);
-  groundGfx.fillRect(0, 0, 400, 100);
-  groundGfx.fillStyle(0xc2a83e);
-  for (let i = 0; i < 20; i++) {
-    groundGfx.fillRect(i * 20, 0, 12, 15);
-  }
-  groundGfx.generateTexture('ground', 400, 100);
+  // Sol
+  g = this.make.graphics({ x: 0, y: 0, add: false });
+  g.fillStyle(0xded895);
+  g.fillRect(0, 0, 400, 100);
+  g.fillStyle(0xc2a83e);
+  for (let i = 0; i < 20; i++) g.fillRect(i * 20, 0, 12, 15);
+  g.generateTexture('ground', 400, 100);
+
+  // Pièce
+  g = this.make.graphics({ x: 0, y: 0, add: false });
+  g.fillStyle(0xffd700);
+  g.fillCircle(12, 12, 11);
+  g.fillStyle(0xffa500);
+  g.fillCircle(12, 12, 7);
+  g.fillStyle(0xffd700);
+  g.fillCircle(12, 12, 4);
+  g.generateTexture('coin', 24, 24);
 }
 
 function create() {
   this.add.rectangle(180, 320, 360, 640, 0x70c5ce);
 
-  ground = this.add.tileSprite(180, 610, 400, 100, 'ground');
-  ground.setDepth(5);
+  ground = this.add.tileSprite(180, 610, 400, 100, 'ground').setDepth(5);
 
   bestScore = parseInt(localStorage.getItem(BEST_KEY) || '0');
 
   bird = this.physics.add.sprite(80, 300, 'bird');
   bird.setDepth(10);
-  bird.body.setSize(28, 24);
+  bird.body.setSize(26, 36);
+  bird.body.setOffset(7, 4);
   bird.body.allowGravity = false;
 
   pipes = this.physics.add.group();
+  coins = this.physics.add.group();
 
   scoreText = this.add.text(180, 40, '0', {
     fontSize: '48px',
@@ -105,38 +130,60 @@ function create() {
   this.input.keyboard.on('keydown-SPACE', onTap, this);
 
   this.physics.add.overlap(bird, pipes, hitObstacle, null, this);
+  this.physics.add.overlap(bird, coins, collectCoin, null, this);
+
+  createMusic();
+}
+
+function createMusic() {
+  try {
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    const notes = [262, 294, 330, 349, 392, 440, 494, 523];
+    let noteIndex = 0;
+
+    bgMusic = setInterval(() => {
+      if (isGameOver || !isStarted) return;
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = 'triangle';
+      o.frequency.value = notes[noteIndex % notes.length];
+      g.gain.value = 0.04;
+      o.connect(g);
+      g.connect(ac.destination);
+      o.start();
+      o.stop(ac.currentTime + 0.2);
+      noteIndex++;
+    }, 350);
+  } catch (e) {
+    bgMusic = null;
+  }
 }
 
 function update() {
-  if (!isGameOver) {
-    ground.tilePositionX += 3;
-  }
-
+  if (!isGameOver) ground.tilePositionX += 3;
   if (!isStarted || isGameOver) return;
 
-  bird.angle = Phaser.Math.Clamp(bird.body.velocity.y * 0.08, -30, 60);
+  bird.angle = Phaser.Math.Clamp(bird.body.velocity.y * 0.08, -30, 50);
 
-  pipes.getChildren().forEach(function(pipe) {
+  pipes.getChildren().forEach(pipe => {
     if (pipe.isTopPipe && !pipe.hasScored && pipe.x < bird.x - 10) {
       pipe.hasScored = true;
-      score = score + 1;
+      score += 1;
       scoreText.setText(score);
-
       if (score > bestScore) {
         bestScore = score;
         localStorage.setItem(BEST_KEY, bestScore);
         bestText.setText('Best: ' + bestScore);
       }
     }
-
-    if (pipe.x < -100) {
-      pipe.destroy();
-    }
+    if (pipe.x < -100) pipe.destroy();
   });
 
-  if (bird.y > 560 || bird.y < 15) {
-    hitObstacle.call(this);
-  }
+  coins.getChildren().forEach(coin => {
+    if (coin.x < -50) coin.destroy();
+  });
+
+  if (bird.y > 560 || bird.y < 15) hitObstacle.call(this);
 }
 
 function onTap() {
@@ -151,10 +198,18 @@ function onTap() {
     this.startText.destroy();
 
     createObstacle.call(this);
+    createCoin.call(this);
 
     pipeTimer = this.time.addEvent({
       delay: 1600,
       callback: createObstacle,
+      callbackScope: this,
+      loop: true
+    });
+
+    coinTimer = this.time.addEvent({
+      delay: 1200,
+      callback: createCoin,
       callbackScope: this,
       loop: true
     });
@@ -186,42 +241,60 @@ function createObstacle() {
   bottomPipe.setImmovable(true);
 }
 
-function hitObstacle() {
+function createCoin() {
   if (isGameOver) return;
 
+  const y = Phaser.Math.Between(120, 480);
+  const coin = coins.create(420, y, 'coin');
+  coin.setVelocityX(-180);
+  coin.body.allowGravity = false;
+  coin.setScale(1.3);
+}
+
+function collectCoin(bird, coin) {
+  coin.destroy();
+  score += 2;
+  scoreText.setText(score);
+
+  if (score > bestScore) {
+    bestScore = score;
+    localStorage.setItem(BEST_KEY, bestScore);
+    bestText.setText('Best: ' + bestScore);
+  }
+}
+
+function hitObstacle() {
+  if (isGameOver) return;
   isGameOver = true;
   bird.setVelocity(0, 0);
 
-  pipes.getChildren().forEach(function(pipe) {
-    pipe.setVelocityX(0);
-  });
+  pipes.getChildren().forEach(p => p.setVelocityX(0));
+  coins.getChildren().forEach(c => c.setVelocityX(0));
 
-  if (pipeTimer) {
-    pipeTimer.remove();
-  }
+  if (pipeTimer) pipeTimer.remove();
+  if (coinTimer) coinTimer.remove();
 
-  const goText = this.add.text(180, 230, 'GAME OVER', {
+  const goText = this.add.text(180, 220, 'GAME OVER', {
     fontSize: '42px',
     color: '#ff2222',
     stroke: '#000000',
     strokeThickness: 6
   }).setOrigin(0.5).setDepth(30);
 
-  const scoreMsg = this.add.text(180, 300, 'Score : ' + score, {
+  const scoreMsg = this.add.text(180, 290, 'Score : ' + score, {
     fontSize: '26px',
     color: '#ffffff',
     stroke: '#000000',
     strokeThickness: 4
   }).setOrigin(0.5).setDepth(30);
 
-  const againText = this.add.text(180, 360, 'Touche pour rejouer', {
+  const againText = this.add.text(180, 350, 'Touche pour rejouer', {
     fontSize: '18px',
     color: '#ffffff',
     stroke: '#000000',
     strokeThickness: 3
   }).setOrigin(0.5).setDepth(30);
 
-  // === CRÉDIT EN BAS ===
   const credit = this.add.text(180, 520, 'Créé par Yasser Tamboura', {
     fontSize: '16px',
     color: '#ffffff',
@@ -237,6 +310,7 @@ function restartGame() {
   gameOverTexts = [];
 
   pipes.clear(true, true);
+  coins.clear(true, true);
 
   score = 0;
   isGameOver = false;
@@ -254,4 +328,4 @@ function restartGame() {
     stroke: '#000000',
     strokeThickness: 4
   }).setOrigin(0.5).setDepth(20);
-}
+    }
