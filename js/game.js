@@ -15,7 +15,7 @@ const config = {
 
 const game = new Phaser.Game(config);
 
-let bird, pipes, score = 0, scoreText, bestText, bestScore = 0;
+let bird, pipes, score = 0, scoreText, bestText, bestScore = 9999999;
 let isGameOver = false, isStarted = false;
 let ground, pipeTimer, gameOverTexts = [];
 let jumpSound, scoreSound, dieSound;
