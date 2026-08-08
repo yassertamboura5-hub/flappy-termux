@@ -1,4 +1,4 @@
-const BEST_KEY = 'flappy-best-v4';
+const BEST_KEY = 'flappy-v6';
 
 const config = {
   type: Phaser.AUTO,
@@ -8,246 +8,242 @@ const config = {
   backgroundColor: 0x70c5ce,
   physics: {
     default: 'arcade',
-    arcade: { gravity: { y: 1000 }, debug: false }
+    arcade: {
+      gravity: { y: 1100 },
+      debug: false
+    }
   },
-  scene: { preload: preload, create: create, update: update }
+  scene: {
+    preload: preload,
+    create: create,
+    update: update
+  }
 };
 
-const game = new Phaser.Game(config);
+new Phaser.Game(config);
 
-let bird, pipes, score = 0, scoreText, bestText, bestScore = 9999999;
-let isGameOver = false, isStarted = false;
-let ground, pipeTimer, gameOverTexts = [];
-let jumpSound, scoreSound, dieSound;
+let bird;
+let pipes;
+let score = 0;
+let scoreText;
+let bestText;
+let bestScore = 0;
+let isGameOver = false;
+let isStarted = false;
+let ground;
+let pipeTimer;
 
 function preload() {
   // Oiseau
-  const g = this.make.graphics({x:0,y:0,add:false});
-  g.fillStyle(0xffd700); g.fillCircle(18,18,15);
-  g.fillStyle(0xfff8dc); g.fillCircle(16,22,9);
-  g.fillStyle(0xffa500); g.fillEllipse(10,18,14,8);
-  g.fillStyle(0xff4500); g.fillTriangle(30,16,42,18,30,22);
-  g.fillStyle(0xffffff); g.fillCircle(24,12,5);
-  g.fillStyle(0x000000); g.fillCircle(25,12,2.5);
-  g.generateTexture('bird', 48, 36);
+  const birdGfx = this.make.graphics({ x: 0, y: 0, add: false });
+  birdGfx.fillStyle(0xffd700);
+  birdGfx.fillCircle(16, 16, 14);
+  birdGfx.fillStyle(0xff6600);
+  birdGfx.fillTriangle(28, 13, 40, 16, 28, 20);
+  birdGfx.fillStyle(0xffffff);
+  birdGfx.fillCircle(20, 11, 4);
+  birdGfx.fillStyle(0x000000);
+  birdGfx.fillCircle(21, 11, 2);
+  birdGfx.generateTexture('bird', 44, 32);
 
-  // Tuyau
-  const p = this.make.graphics({x:0,y:0,add:false});
-  p.fillStyle(0x2ecc71); p.fillRect(0,0,60,400);
-  p.fillStyle(0x27ae60); p.fillRect(0,0,60,20); p.fillRect(0,380,60,20);
-  p.generateTexture('pipe', 60, 400);
+  // Tuyau (obstacle)
+  const pipeGfx = this.make.graphics({ x: 0, y: 0, add: false });
+  pipeGfx.fillStyle(0x2ecc71);
+  pipeGfx.fillRect(0, 0, 70, 500);
+  pipeGfx.fillStyle(0x27ae60);
+  pipeGfx.fillRect(0, 0, 70, 30);
+  pipeGfx.fillRect(0, 470, 70, 30);
+  pipeGfx.generateTexture('pipe', 70, 500);
 
   // Sol
-  const s = this.make.graphics({x:0,y:0,add:false});
-  s.fillStyle(0xded895); s.fillRect(0,0,400,80);
-  s.fillStyle(0xc2a83e);
-  for(let i=0;i<20;i++) s.fillRect(i*20,0,10,12);
-  s.generateTexture('ground', 400, 80);
-
-  // Fond
-  const b = this.make.graphics({x:0,y:0,add:false});
-  b.fillStyle(0x70c5ce); b.fillRect(0,0,360,640);
-  b.fillStyle(0xffffff,0.6);
-  b.fillCircle(70,90,30); b.fillCircle(100,80,40); b.fillCircle(130,95,25);
-  b.fillCircle(240,140,35); b.fillCircle(270,130,40); b.fillCircle(300,145,25);
-  b.generateTexture('bg', 360, 640);
+  const groundGfx = this.make.graphics({ x: 0, y: 0, add: false });
+  groundGfx.fillStyle(0xded895);
+  groundGfx.fillRect(0, 0, 400, 100);
+  groundGfx.fillStyle(0xc2a83e);
+  for (let i = 0; i < 20; i++) {
+    groundGfx.fillRect(i * 20, 0, 12, 15);
+  }
+  groundGfx.generateTexture('ground', 400, 100);
 }
 
 function create() {
-  this.add.image(180, 320, 'bg');
-  ground = this.add.tileSprite(180, 600, 400, 80, 'ground').setDepth(5);
+  // Fond
+  this.add.rectangle(180, 320, 360, 640, 0x70c5ce);
 
+  // Sol
+  ground = this.add.tileSprite(180, 610, 400, 100, 'ground');
+  ground.setDepth(5);
+
+  // Meilleur score
   bestScore = parseInt(localStorage.getItem(BEST_KEY) || '0');
 
+  // Oiseau
   bird = this.physics.add.sprite(80, 300, 'bird');
   bird.setDepth(10);
   bird.body.setSize(28, 24);
-  bird.body.setOffset(6, 4);
   bird.body.allowGravity = false;
 
+  // Groupe d'obstacles
   pipes = this.physics.add.group();
 
-  scoreText = this.add.text(180, 50, '0', {
-    font: 'bold 52px Arial', fill: '#fff', stroke: '#000', strokeThickness: 6
+  // Score
+  scoreText = this.add.text(180, 40, '0', {
+    fontSize: '48px',
+    fontFamily: 'Arial Black',
+    color: '#ffffff',
+    stroke: '#000000',
+    strokeThickness: 6
   }).setOrigin(0.5).setDepth(20);
 
   bestText = this.add.text(12, 12, 'Best: ' + bestScore, {
-    font: '18px Arial', fill: '#fff', stroke: '#000', strokeThickness: 3
+    fontSize: '16px',
+    color: '#ffffff',
+    stroke: '#000000',
+    strokeThickness: 3
   }).setDepth(20);
 
-  const startMsg = this.add.text(180, 400, 'Touche pour commencer', {
-    font: '22px Arial', fill: '#fff', stroke: '#000', strokeThickness: 4
+  // Message de départ
+  this.startText = this.add.text(180, 380, 'Touche pour commencer', {
+    fontSize: '20px',
+    color: '#ffffff',
+    stroke: '#000000',
+    strokeThickness: 4
   }).setOrigin(0.5).setDepth(20);
-  gameOverTexts.push(startMsg);
 
+  // Contrôles
   this.input.on('pointerdown', onTap, this);
   this.input.keyboard.on('keydown-SPACE', onTap, this);
-  this.physics.add.overlap(bird, pipes, hitPipe, null, this);
 
-  createSounds();
-}
-
-function createSounds() {
-  try {
-    const ac = new (window.AudioContext || window.webkitAudioContext)();
-    jumpSound = () => {
-      const o = ac.createOscillator(), g = ac.createGain();
-      o.type = 'square'; o.frequency.value = 500;
-      g.gain.value = 0.1; o.connect(g); g.connect(ac.destination);
-      o.start(); o.stop(ac.currentTime + 0.08);
-    };
-    scoreSound = () => {
-      const o = ac.createOscillator(), g = ac.createGain();
-      o.type = 'sine'; o.frequency.value = 900;
-      g.gain.value = 0.1; o.connect(g); g.connect(ac.destination);
-      o.start(); o.stop(ac.currentTime + 0.1);
-    };
-    dieSound = () => {
-      const o = ac.createOscillator(), g = ac.createGain();
-      o.type = 'sawtooth'; o.frequency.value = 200;
-      g.gain.value = 0.15; o.connect(g); g.connect(ac.destination);
-      o.start(); o.stop(ac.currentTime + 0.3);
-    };
-  } catch(e) {
-    jumpSound = scoreSound = dieSound = () => {};
-  }
+  // Collision avec les obstacles
+  this.physics.add.overlap(bird, pipes, hitObstacle, null, this);
 }
 
 function update() {
-  if (!isGameOver) ground.tilePositionX += 3;
+  // Sol qui défile
+  if (!isGameOver) {
+    ground.tilePositionX += 3;
+  }
+
   if (!isStarted || isGameOver) return;
 
-  // Rotation oiseau
-  bird.rotation = Phaser.Math.Clamp(bird.body.velocity.y / 450, -0.6, 1.1);
+  // Rotation de l'oiseau
+  bird.angle = Phaser.Math.Clamp(bird.body.velocity.y * 0.08, -30, 60);
 
-  // Supprimer tuyaux hors écran + compter le score
-  pipes.getChildren().forEach(pipe => {
-    if (pipe.x < -50) {
-      pipes.remove(pipe, true, true);
-    }
-
-    // Score : quand le tuyau du haut passe derrière l'oiseau
-    if (pipe.isTop && !pipe.scored && pipe.x < bird.x - 30) {
-      pipe.scored = true;
-      score++;
+  // Gestion des obstacles
+  pipes.getChildren().forEach(function(pipe) {
+    // Donner un point quand l'oiseau dépasse un tuyau du haut
+    if (pipe.isTopPipe && !pipe.hasScored && pipe.x < bird.x - 10) {
+      pipe.hasScored = true;
+      score = score + 1;
       scoreText.setText(score);
-      scoreSound();
+
       if (score > bestScore) {
         bestScore = score;
         localStorage.setItem(BEST_KEY, bestScore);
         bestText.setText('Best: ' + bestScore);
       }
     }
+
+    // Supprimer les obstacles hors de l'écran
+    if (pipe.x < -100) {
+      pipe.destroy();
+    }
   });
 
-  // Collision sol / plafond
-  if (bird.y > 560 || bird.y < 20) {
-    endGame.call(this);
+  // Si l'oiseau touche le sol ou le plafond
+  if (bird.y > 560 || bird.y < 15) {
+    hitObstacle.call(this);
   }
 }
 
 function onTap() {
   if (isGameOver) {
-    restart.call(this);
+    // Recommencer
+    this.scene.restart();
     return;
   }
+
   if (!isStarted) {
-    startGame.call(this);
+    // Démarrer le jeu
+    isStarted = true;
+    bird.body.allowGravity = true;
+    this.startText.destroy();
+
+    // Créer le premier obstacle tout de suite
+    createObstacle.call(this);
+
+    // Puis créer un obstacle toutes les 1.6 secondes
+    pipeTimer = this.time.addEvent({
+      delay: 1600,
+      callback: createObstacle,
+      callbackScope: this,
+      loop: true
+    });
   }
-  bird.setVelocityY(-360);
-  jumpSound();
+
+  // Faire sauter l'oiseau
+  bird.setVelocityY(-370);
 }
 
-function startGame() {
-  isStarted = true;
-  bird.body.allowGravity = true;
-  gameOverTexts.forEach(t => t.destroy());
-  gameOverTexts = [];
-
-  // Premier tuyau immédiat + ensuite toutes les 1.5s
-  addPipes.call(this);
-  pipeTimer = this.time.addEvent({
-    delay: 1500,
-    callback: addPipes,
-    callbackScope: this,
-    loop: true
-  });
-}
-
-function addPipes() {
+function createObstacle() {
   if (isGameOver) return;
 
-  const gap = 150;
-  const holeY = Phaser.Math.Between(140, 420);
-  const x = 400;
-  const speed = -200;
+  const gap = 160; // Espace pour passer
+  const topY = Phaser.Math.Between(100, 300);
+  const x = 420;  // Position de départ (à droite de l'écran)
 
-  // Tuyau HAUT
-  const top = this.physics.add.sprite(x, holeY - gap/2 - 200, 'pipe');
-  top.setImmovable(true);
-  top.body.allowGravity = false;
-  top.setVelocityX(speed);
-  top.setDisplaySize(70, 400);
-  top.setFlipY(true);
-  top.isTop = true;
-  top.scored = false;
-  pipes.add(top);
+  // === Obstacle du HAUT ===
+  const topPipe = pipes.create(x, topY - 250, 'pipe');
+  topPipe.setDisplaySize(70, 500);
+  topPipe.body.allowGravity = false;
+  topPipe.setVelocityX(-200);     // Vitesse vers la gauche
+  topPipe.setImmovable(true);
+  topPipe.setFlipY(true);
+  topPipe.isTopPipe = true;
+  topPipe.hasScored = false;
 
-  // Tuyau BAS
-  const bottom = this.physics.add.sprite(x, holeY + gap/2 + 200, 'pipe');
-  bottom.setImmovable(true);
-  bottom.body.allowGravity = false;
-  bottom.setVelocityX(speed);
-  bottom.setDisplaySize(70, 400);
-  pipes.add(bottom);
+  // === Obstacle du BAS ===
+  const bottomPipe = pipes.create(x, topY + gap + 250, 'pipe');
+  bottomPipe.setDisplaySize(70, 500);
+  bottomPipe.body.allowGravity = false;
+  bottomPipe.setVelocityX(-200);
+  bottomPipe.setImmovable(true);
 }
 
-function hitPipe() {
-  endGame.call(this);
-}
-
-function endGame() {
+function hitObstacle() {
   if (isGameOver) return;
+
   isGameOver = true;
-  dieSound();
-
-  pipes.getChildren().forEach(p => {
-    if (p.body) p.body.setVelocityX(0);
-  });
-  if (pipeTimer) pipeTimer.remove();
-
-  const go = this.add.text(180, 260, 'GAME OVER', {
-    font: 'bold 42px Arial', fill: '#ff3333', stroke: '#000', strokeThickness: 6
-  }).setOrigin(0.5).setDepth(30);
-
-  const sc = this.add.text(180, 330, 'Score : ' + score, {
-    font: '26px Arial', fill: '#fff', stroke: '#000', strokeThickness: 4
-  }).setOrigin(0.5).setDepth(30);
-
-  const again = this.add.text(180, 390, 'Touche pour rejouer', {
-    font: '18px Arial', fill: '#fff', stroke: '#000', strokeThickness: 3
-  }).setOrigin(0.5).setDepth(30);
-
-  gameOverTexts = [go, sc, again];
-}
-
-function restart() {
-  pipes.clear(true, true);
-  gameOverTexts.forEach(t => t.destroy());
-  gameOverTexts = [];
-
-  score = 0;
-  isGameOver = false;
-  isStarted = false;
-  scoreText.setText('0');
-
-  bird.setPosition(80, 300);
   bird.setVelocity(0, 0);
-  bird.rotation = 0;
-  bird.body.allowGravity = false;
 
-  const startMsg = this.add.text(180, 400, 'Touche pour commencer', {
-    font: '22px Arial', fill: '#fff', stroke: '#000', strokeThickness: 4
-  }).setOrigin(0.5).setDepth(20);
-  gameOverTexts.push(startMsg);
-    }
+  // Arrêter tous les obstacles
+  pipes.getChildren().forEach(function(pipe) {
+    pipe.setVelocityX(0);
+  });
+
+  if (pipeTimer) {
+    pipeTimer.remove();
+  }
+
+  // Afficher Game Over
+  this.add.text(180, 250, 'GAME OVER', {
+    fontSize: '42px',
+    color: '#ff2222',
+    stroke: '#000000',
+    strokeThickness: 6
+  }).setOrigin(0.5).setDepth(30);
+
+  this.add.text(180, 320, 'Score : ' + score, {
+    fontSize: '26px',
+    color: '#ffffff',
+    stroke: '#000000',
+    strokeThickness: 4
+  }).setOrigin(0.5).setDepth(30);
+
+  this.add.text(180, 380, 'Touche pour rejouer', {
+    fontSize: '18px',
+    color: '#ffffff',
+    stroke: '#000000',
+    strokeThickness: 3
+  }).setOrigin(0.5).setDepth(30);
+}
