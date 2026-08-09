@@ -548,4 +548,4 @@ function restartGame() {
       strokeThickness: 4
     }
   ).setOrigin(0.5).setDepth(20);
-}
+      }
